@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SELL MY BONGAPOINTS</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { margin: 10px 0; padding: 10px 20px; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .chatbox { 
+            display: none;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .messages { 
+            height: 300px; 
+            overflow-y: auto; 
+            border: 1px solid #ccc; 
+            padding: 10px; 
+            margin-bottom: 10px;
+            background: #f9f9f9;
+        }
+        .message-input { 
+            width: 70%; 
+            padding: 8px; 
+            margin-right: 10px; 
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .image-input { 
+            margin: 10px 0;
+            display: block; 
+        }
+        .message {
+            margin: 8px 0;
+            padding: 12px;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .message-content {
+            margin: 8px 0;
+            word-wrap: break-word;
+        }
+        .message-image {
+            max-width: 200px;
+            border-radius: 4px;
+            margin-top: 8px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .message-image:hover {
+            transform: scale(1.05);
+        }
+        .sending-indicator {
+            color: #666;
+            font-style: italic;
+            display: none;
+            margin: 5px 0;
+        }
+        .input-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .controls-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .image-preview {
+            max-width: 100px;
+            max-height: 100px;
+            margin: 5px 0;
+            display: none;
+        }
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .result-group {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        .result-item {
+            margin: 10px 0;
+        }
+        .error {
+            color: red;
+            display: none;
+            margin-top: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .ussd-instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e8f5e9;
+            border-radius: 5px;
+            display: none;
+        }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+</head>
+<body>
+    <h1>SELL MY BONGA POINTS</h1>
+    <div id="authContainer">
+        <div id="authButtons">
+            <button id="signUpButton">Sign up with Google</button>
+            <button id="loginButton">Login with Google</button>
+        </div>
+        <div id="userSection">
+            <div id="userInfo"></div>
+            <button id="signOutButton">Sign out</button>
+        </div>
+    </div>
+
+    <div id="chatboxContainer"></div>
+    <div class="container">
+      <h2>Bonga Points to KSh Converter</h2>
+      
+      <div class="input-group">
+          <label for="bongaPoints">Enter Bonga Points:</label><br>
+          <input type="number" id="bongaPoints" min="1">
+          <div id="error" class="error">Please enter a valid number of Bonga Points</div>
+      </div>
+
+      <button onclick="convert()">Convert</button>
+      <button onclick="showUssdInstructions()">Create Order</button>
+
+      <div id="results" class="result-group" style="display: none;">
+          <div class="result-item">Initial Amount: <span id="initialAmount">0</span> KSh</div>
+          <div class="result-item">Transaction Cost: <span id="transactionCost">0</span> KSh</div>
+          <div class="result-item">Service Fee: <span id="serviceFee">0</span> KSh</div>
+          <div class="result-item">Final Amount: <span id="finalAmount">0</span> KSh</div>
+      </div>
+
+      <div id="ussdInstructions" class="ussd-instructions">
+          <h3>How to Complete Your Bonga Points Conversion</h3>
+          <ol>
+              <li>Dial <strong>*126#</strong> on your Safaricom line</li>
+              <li>Select "Lipa na Bonga Points"</li>
+              <li>Choose "Paybill".</li>
+              <li>Enter the business number 548800.</li>
+              <li>Enter the account number 50799514.</li>
+              <li>Enter the amount of Bonga Points in Ksh (e.g., 100 Ksh).</li>
+              <li>Enter your Mpesa PIN.</li>
+            <li>To receive your Ksh-converted points, login and enter the Mpesa number receiving funds in the chat box and attach proof of Transfer (screenshot or message from Safaricom containing the transaction reference).</li>
+          </ol>
+          <p>After verification, you will receive your payment through the provided number. Thank you for choosing us!</p>
+      </div>
+  </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBhgN2MUKbZlASsUCUnw08082_WeVpevVc",
+            authDomain: "fireship-demos-54b08.firebaseapp.com",
+            projectId: "fireship-demos-54b08",
+            storageBucket: "fireship-demos-54b08.appspot.com",
+            messagingSenderId: "335121349037",
+            appId: "1:335121349037:web:5f23b7ccfb476fc77c8924"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+        const provider = new firebase.auth.GoogleAuthProvider();
+
+        class ChatBox {
+            constructor(userId, userName) {
+                this.userId = userId;
+                this.userName = userName;
+                this.isProcessing = false;
+                this.lastMessageTime = 0;
+                this.createChatboxUI();
+                this.initializeListeners();
+                this.loadMessages();
+            }
+
+            createChatboxUI() {
+                const container = document.createElement('div');
+                container.className = 'chatbox';
+                container.id = `chatbox-${this.userId}`;
+                
+                container.innerHTML = `
+                    <h3>Chat for ${this.userName}</h3>
+                    <div class="messages" id="messages-${this.userId}"></div>
+                    <div class="sending-indicator" id="sending-${this.userId}">Sending message...</div>
+                    <div class="input-container">
+                        <img class="image-preview" id="imagePreview-${this.userId}">
+                        <div class="controls-container">
+                            <input type="text" class="message-input" id="messageInput-${this.userId}" placeholder="Type a message...">
+                            <input type="file" class="image-input" id="imageInput-${this.userId}" accept="image/*">
+                            <button class="send-button" id="sendButton-${this.userId}">Send</button>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('chatboxContainer').appendChild(container);
+                container.style.display = 'block';
+            }
+
+            initializeListeners() {
+                const sendButton = document.getElementById(`sendButton-${this.userId}`);
+                const messageInput = document.getElementById(`messageInput-${this.userId}`);
+                const imageInput = document.getElementById(`imageInput-${this.userId}`);
+                const imagePreview = document.getElementById(`imagePreview-${this.userId}`);
+
+                sendButton.addEventListener('click', () => this.sendMessage());
+                messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.sendMessage();
+                    }
+                });
+
+                // Add image preview functionality
+                imageInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            imagePreview.src = e.target.result;
+                            imagePreview.style.display = 'block';
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        imagePreview.style.display = 'none';
+                    }
+                });
+            }
+//here
+            async sendMessage() {
+                if (this.isProcessing) return;
+                
+                const messageInput = document.getElementById(`messageInput-${this.userId}`);
+                const imageInput = document.getElementById(`imageInput-${this.userId}`);
+                const imagePreview = document.getElementById(`imagePreview-${this.userId}`);
+                const sendButton = document.getElementById(`sendButton-${this.userId}`);
+                const sendingIndicator = document.getElementById(`sending-${this.userId}`);
+                
+                const message = messageInput.value.trim();
+                const image = imageInput.files[0];
+
+                if (!message && !image) return;
+
+                const currentTime = Date.now();
+                if (currentTime - this.lastMessageTime < 1000) {
+                    console.log('Please wait before sending another message');
+                    return;
+                }
+
+                try {
+                    this.isProcessing = true;
+                    sendButton.disabled = true;
+                    sendingIndicator.style.display = 'block';
+
+                    let imageUrl = null;
+                    if (image) {
+                        const imageRef = storage.ref(`images/${Date.now()}_${image.name}`);
+                        await imageRef.put(image);
+                        imageUrl = await imageRef.getDownloadURL();
+                    }
+
+                    const messageData = {
+                        userId: this.userId,
+                        userName: this.userName,
+                        content: message,
+                        imageUrl: imageUrl,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        chatId: this.userId
+                    };
+
+                    // Immediately display the message locally
+                    this.displayMessage({
+                        ...messageData,
+                        timestamp: new Date()
+                    }, document.getElementById(`messages-${this.userId}`));
+
+                    // Then save to Firebase
+                    await db.collection('messages').add(messageData);
+
+                    messageInput.value = '';
+                    imageInput.value = '';
+                    imagePreview.style.display = 'none';
+                    this.lastMessageTime = currentTime;
+
+                } catch (error) {
+                    console.error("Error sending message:", error);
+                    alert('Failed to send message. Please try again.');
+                } finally {
+                    this.isProcessing = false;
+                    sendButton.disabled = false;
+                    sendingIndicator.style.display = 'none';
+                }
+            }
+
+            loadMessages() {
+                const messagesDiv = document.getElementById(`messages-${this.userId}`);
+                
+                db.collection('messages')
+                    .where('chatId', '==', this.userId)
+                    .orderBy('timestamp')
+                    .onSnapshot(snapshot => {
+                        snapshot.docChanges().forEach(change => {
+                            if (change.type === 'added') {
+                                this.displayMessage(change.doc.data(), messagesDiv);
+                            }
+                        });
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    }, error => {
+                        console.error("Error loading messages:", error);
+                    });
+            }
+
+            displayMessage(message, container) {
+                const messageElement = document.createElement('div');
+                messageElement.className = 'message';
+                
+                const header = document.createElement('div');
+                header.className = 'message-header';
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = message.userName;
+                
+                const timeSpan = document.createElement('span');
+                const timestamp = message.timestamp instanceof Date ? message.timestamp : message.timestamp?.toDate();
+                timeSpan.textContent = timestamp ? timestamp.toLocaleTimeString() : 'Just now';
+                
+                header.appendChild(nameSpan);
+                header.appendChild(timeSpan);
+                
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                content.textContent = message.content;
+                
+                messageElement.appendChild(header);
+                messageElement.appendChild(content);
+                
+                if (message.imageUrl) {
+                    const img = document.createElement('img');
+                    img.src = message.imageUrl;
+                    img.className = 'message-image';
+                    img.alt = 'Shared image';
+                    img.addEventListener('click', () => window.open(message.imageUrl, '_blank'));
+                    messageElement.appendChild(img);
+                }
+                
+                container.appendChild(messageElement);
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        // Auth functions remain the same
+        function signUpWithGoogle() {
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    if (result.additionalUserInfo.isNewUser) {
+                        console.log('New user signed up with Google:', result.user);
+                    } else {
+                        console.log('Existing user tried to sign up:', result.user);
+                        alert('You already have an account. Please use the login button.');
+                    }
+                    updateUI(result.user);
+                }).catch((error) => {
+                    console.error('Error during Google sign-up:', error);
+                });
+        }
+
+        function loginWithGoogle() {
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    if (!result.additionalUserInfo.isNewUser) {
+                        console.log('User logged in with Google:', result.user);
+                    } else {
+                        console.log('New user tried to log in:', result.user);
+                        alert('You don\'t have an account yet. Please use the sign-up button.');
+                    }
+                    updateUI(result.user);
+                }).catch((error) => {
+                    console.error('Error during Google login:', error);
+                });
+        }
+
+        function updateUI(user) {
+            const authButtons = document.getElementById('authButtons');
+            const userSection = document.getElementById('userSection');
+            const chatboxContainer = document.getElementById('chatboxContainer');
+            const userInfo = document.getElementById('userInfo');
+
+            if (user) {
+                authButtons.style.display = 'none';
+                userSection.style.display = 'block';
+                userInfo.textContent = `Welcome, ${user.displayName || user.email}!`;
+                chatboxContainer.innerHTML = '';
+                new ChatBox(user.uid, user.displayName || user.email);
+            } else {
+                authButtons.style.display = 'block';
+                userSection.style.display = 'none';
+                chatboxContainer.innerHTML = '';
+                userInfo.textContent = '';
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('signUpButton').addEventListener('click', signUpWithGoogle);
+            document.getElementById('loginButton').addEventListener('click', loginWithGoogle);
+            document.getElementById('signOutButton').addEventListener('click', () => auth.signOut());
+        });
+
+        // Listen for authentication state changes
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                console.log('User is signed in:', user);
+                updateUI(user);
+            } else {
+                console.log('User is signed out');
+                updateUI(null);
+            }
+        });
+
+        const bongaToKshRate = 0.2; // 1 Bonga Point = 0.2 KSh
+
+const feeStructure = [
+    { maxAmount: 100, transactionCost: 0, serviceFee: 1 },
+    { maxAmount: 500, transactionCost: 7, serviceFee: 2 },
+    { maxAmount: 1000, transactionCost: 13, serviceFee: 6 },
+    { maxAmount: 1500, transactionCost: 23, serviceFee: 7 },
+    { maxAmount: 2500, transactionCost: 33, serviceFee: 8 },
+    { maxAmount: 3500, transactionCost: 53, serviceFee: 9 },
+    { maxAmount: 5000, transactionCost: 57, serviceFee: 14 },
+    { maxAmount: 7500, transactionCost: 78, serviceFee: 16 },
+    { maxAmount: 10000, transactionCost: 90, serviceFee: 19 },
+    { maxAmount: 15000, transactionCost: 100, serviceFee: 20 },
+    { maxAmount: 20000, transactionCost: 105, serviceFee: 25 },
+    { maxAmount: 25000, transactionCost: 108, serviceFee: 30 }
+];
+
+function calculateFees(amount) {
+    for (const tier of feeStructure) {
+        if (amount <= tier.maxAmount) {
+            return {
+                transactionCost: tier.transactionCost,
+                serviceFee: tier.serviceFee
+            };
+        }
+    }
+    // For amounts above the highest tier
+    return {
+        transactionCost: 10000,
+        serviceFee: 10000
+    };
+}
+
+function convert() {
+    const bongaPointsInput = document.getElementById('bongaPoints');
+    const bongaPoints = parseInt(bongaPointsInput.value);
+    const errorElement = document.getElementById('error');
+    const resultsElement = document.getElementById('results');
+
+    // Input validation
+    if (!bongaPoints || bongaPoints < 1) {
+        errorElement.style.display = 'block';
+        resultsElement.style.display = 'none';
+        return;
+    }
+
+    errorElement.style.display = 'none';
+    resultsElement.style.display = 'block';
+
+    // Calculate initial amount
+    const initialAmount = bongaPoints * bongaToKshRate;
+    
+    // Calculate fees
+    const fees = calculateFees(initialAmount);
+    const finalAmount = initialAmount - fees.transactionCost - fees.serviceFee;
+
+    // Update display
+    document.getElementById('initialAmount').textContent = initialAmount.toFixed(2);
+    document.getElementById('transactionCost').textContent = fees.transactionCost.toFixed(2);
+    document.getElementById('serviceFee').textContent = fees.serviceFee.toFixed(2);
+    document.getElementById('finalAmount').textContent = finalAmount.toFixed(2);
+}
+
+function showUssdInstructions() {
+    const instructionsElement = document.getElementById('ussdInstructions');
+    instructionsElement.style.display = 
+        instructionsElement.style.display === 'none' || 
+        instructionsElement.style.display === '' ? 'block' : 'none';
+}
+
+// Add input validation on keypress
+document.getElementById('bongaPoints').addEventListener('input', function(e) {
+    if (this.value < 0) {
+        this.value = 0;
+    }
+});
+    </script>
+</body>
+</html>
